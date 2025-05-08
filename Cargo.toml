@@ -1,0 +1,11 @@
+[package]
+name = "rust-tikz"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.92"
+flate2 = "1.0.34"
+tar = "0.4.43"
+wasmi = "0.39.0"
+wat = "1.219.1"
