@@ -1,6 +1,6 @@
 use wasmi::*;
 
-use crate::{FilePointer, FileType, VirtualFileSystem};
+use crate::{FileType, VirtualFileSystem};
 
 /// All the functions that are imported by the TeXJax WebAssembly module.
 /// These are created to mirror `library.js` from the original TeXJax project.
@@ -112,19 +112,19 @@ impl TexJaxImports {
                 },
             ),
             get_current_day: Func::wrap(&mut *store, || -> i32 {
-                println!("get_current_day");
+                println!("[get_current_day]");
                 1
             }),
             get_current_minutes: Func::wrap(&mut *store, || -> i32 {
-                println!("get_current_minutes");
+                println!("[get_current_minutes]");
                 0
             }),
             get_current_month: Func::wrap(&mut *store, || -> i32 {
-                println!("get_current_month");
+                println!("[get_current_month]");
                 1
             }),
             get_current_year: Func::wrap(&mut *store, || -> i32 {
-                println!("get_current_year");
+                println!("[get_current_year]");
                 1970
             }),
             input_ln: Func::wrap(
@@ -138,6 +138,16 @@ impl TexJaxImports {
                  max_buf_stack_pointer: i32,
                  buf_size: i32|
                  -> i32 {
+                    println!(
+                        "[input_ln] {} {} {} {} {} {} {}",
+                        fd,
+                        bypass_eoln,
+                        buf_pointer,
+                        first_pointer,
+                        last_pointer,
+                        max_buf_stack_pointer,
+                        buf_size,
+                    );
                     let mem = caller.get_export("0").unwrap().into_memory().unwrap();
                     // Get the u32 stored in the `first_pointer` memory location.
                     let get_first = |caller: &Caller<VirtualFileSystem>| {
@@ -145,20 +155,38 @@ impl TexJaxImports {
                             u8_to_u32(&read_memory(&mem, caller, first_pointer as usize, 4));
                         first
                     };
+                    // Get the u32 stored in the `first_pointer` memory location.
+                    let get_last = |caller: &Caller<VirtualFileSystem>| {
+                        let last = u8_to_u32(&read_memory(&mem, caller, last_pointer as usize, 4));
+                        last
+                    };
                     //// Set the u32 stored in the `first_pointer` memory location.
-                    //let set_first = |first: u32, caller: &mut Caller<VirtualFileSystem>| {
-                    //    mem.write(caller, first_pointer as usize, &first.to_ne_bytes())
-                    //        .expect("Failed to write to memory");
-                    //};
+                    let set_first = |first: u32, caller: &mut Caller<VirtualFileSystem>| {
+                        mem.write(caller, first_pointer as usize, &first.to_ne_bytes())
+                            .expect("Failed to write to memory");
+                    };
                     // Set the u32 stored in the `last_pointer` memory location.
                     let set_last = |last: u32, caller: &mut Caller<VirtualFileSystem>| {
                         mem.write(caller, last_pointer as usize, &last.to_ne_bytes())
                             .expect("Failed to write to memory");
                     };
 
-                    dbg!((caller.data_mut() as &mut VirtualFileSystem)
-                        .get_file_pointer_by_index(fd)
-                        .unwrap());
+                    // dbg!((caller.data_mut() as &mut VirtualFileSystem)
+                    //     .get_file_pointer_by_index(fd)
+                    //     .unwrap());
+
+                    // Get the byte at offset first_pointer and last_pointer from the memory
+                    let first = get_first(&caller);
+                    let last = first;
+                    // Default last_pointer to first_pointer in case we need to bail early.
+                    // cf. Matthew 19:30
+                    set_last(last, &mut caller);
+
+                    println!(
+                        "   [input_ln] first[0] = {}; last[0] = {}",
+                        get_first(&caller),
+                        get_last(&caller)
+                    );
 
                     // Bypassing the eoln character means stepping past any "\n". The TeX algorithm
                     // specifies to just advance the file pointer one.
@@ -174,12 +202,6 @@ impl TexJaxImports {
                         first_char.clear();
                     }
 
-                    // Get the byte at offset first_pointer and last_pointer from the memory
-                    let first = get_first(&caller);
-                    let last = first;
-                    // Default last_pointer to first_pointer in case we need to bail early.
-                    set_last(last, &mut caller);
-
                     let vfs: &mut VirtualFileSystem = caller.data_mut();
 
                     // If we are at the end of the file, we need to return early.
@@ -190,7 +212,7 @@ impl TexJaxImports {
                     // Figure out where the next newline is.
                     let newline_offset = vfs.next_newline_offset_by_index(fd).unwrap();
                     let current_file_position = vfs.get_file_pointer_by_index(fd).unwrap().position;
-                    dbg!("c", vfs.get_file_pointer_by_index(fd).unwrap().position);
+                    //dbg!("c", vfs.get_file_pointer_by_index(fd).unwrap().position);
                     let input_line = if newline_offset > current_file_position {
                         vfs.read_from_file_by_index(fd, newline_offset - current_file_position)
                     } else {
@@ -201,7 +223,7 @@ impl TexJaxImports {
                         .chain(input_line.into_iter())
                         .collect::<Vec<_>>();
 
-                    dbg!(String::from_utf8_lossy(&input_line));
+                    //dbg!(String::from_utf8_lossy(&input_line));
 
                     mem.write(
                         &mut caller,
@@ -218,19 +240,15 @@ impl TexJaxImports {
                     let last = first + input_line.len() as u32 + 1;
                     set_last(last, &mut caller);
 
-                    println!("   {} {}", first, last);
-
                     println!(
-                        "inputln {} {} {} {} {} {} {} {} {:?}",
-                        fd,
-                        bypass_eoln,
-                        buf_pointer,
-                        first_pointer,
-                        last_pointer,
-                        max_buf_stack_pointer,
-                        buf_size,
+                        "   [input_ln] (string: '{}') (raw: {:?})",
                         String::from_utf8(input_line.clone()).unwrap(),
                         &input_line
+                    );
+                    println!(
+                        "   [input_ln] first[0] = {}; last[0] = {}",
+                        get_first(&caller),
+                        get_last(&caller)
                     );
                     1
                 },
@@ -251,7 +269,8 @@ impl TexJaxImports {
             print_newline: Func::wrap(&mut *store, |mut caller: Caller<_>, fd: i32| {
                 let vfs: &mut VirtualFileSystem = caller.data_mut();
                 println!(
-                    "[print_newline] {:?}",
+                    "[print_newline] {} {:?}",
+                    fd,
                     vfs.get_file_pointer_by_index(fd).map(|fp| &fp.file)
                 );
 
@@ -273,8 +292,9 @@ impl TexJaxImports {
                     .unwrap();
 
                     println!(
-                        "[print_string] {} {:?} {:?}",
+                        "[print_string] {} {} {:?} {:?}",
                         fd,
+                        pointer,
                         (caller.data() as &VirtualFileSystem)
                             .get_file_pointer_by_index(fd)
                             .unwrap()
