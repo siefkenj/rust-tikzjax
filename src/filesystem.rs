@@ -1,4 +1,4 @@
-use std::{cmp::min, collections::HashMap};
+use std::{cmp::min, collections::HashMap, fs::File};
 
 /// A virtual file system that allows for opening, reading, and
 /// writing files in memory.
@@ -31,14 +31,22 @@ impl VirtualFileSystem {
     ///
     /// This function always returns a file pointer that is initialized to position 0
     /// in the file.
-    pub fn get_file_descriptor(&mut self, file: FileType<&str>) -> usize {
+    pub fn get_file_descriptor(&mut self, file: FileType<&str>, erstat_if_new: bool) -> usize {
         let file_pointer = match file {
             FileType::Stdin => FilePointer::new_stdin(),
             FileType::Stdout => FilePointer::new_stdout(),
             FileType::Named(name) => {
+                let mut is_new_file = false;
                 // Ensure there is some data for the file
-                self.data.entry(name.to_string()).or_insert_with(Vec::new);
-                FilePointer::new_named(name)
+                self.data.entry(name.to_string()).or_insert_with(|| {
+                    is_new_file = true;
+                    Vec::new()
+                });
+                if is_new_file && erstat_if_new {
+                    FilePointer::new_named_with_erstat(name)
+                } else {
+                    FilePointer::new_named(name)
+                }
             }
         };
         self.fd_to_file_pointer.push(file_pointer);
@@ -124,6 +132,50 @@ impl VirtualFileSystem {
         }
     }
 
+    /// Read a byte at a specific offset of a file specified by `fd`. The file pointer's position will _not_ be updated.
+    pub fn get_file_byte(&mut self, fd: i32, offset: usize) -> u8 {
+        if fd < 0 {
+            panic!("read_from_file_by_index to fd {} but fd is negative", fd);
+        }
+        if let Some(fp) = self.fd_to_file_pointer.get_mut(fd as usize) {
+            let buffer = match fp.file {
+                FileType::Stdin => &mut self.stdin,
+                FileType::Stdout => &mut self.stdout,
+                FileType::Named(ref name) => self.data.get_mut(name).unwrap(),
+            };
+            let data = buffer[offset];
+            data
+        } else {
+            println!(
+                "read_from_file_by_index to fd {} but there is no corresponding file",
+                fd
+            );
+            0
+        }
+    }
+
+    /// Return the current length (in bytes) of the file referenced by `fd`.
+    pub fn get_length(&mut self, fd: i32) -> usize {
+        if fd < 0 {
+            println!("read_from_file_by_index to fd {} but fd is negative", fd);
+            return 0;
+        }
+        if let Some(fp) = self.fd_to_file_pointer.get_mut(fd as usize) {
+            let buffer = match fp.file {
+                FileType::Stdin => &mut self.stdin,
+                FileType::Stdout => &mut self.stdout,
+                FileType::Named(ref name) => self.data.get_mut(name).unwrap(),
+            };
+            buffer.len()
+        } else {
+            println!(
+                "read_from_file_by_index to fd {} but there is no corresponding file",
+                fd
+            );
+            0
+        }
+    }
+
     /// Returns whether the file pointer is at the end of the file.
     pub fn at_eof_by_index(&self, fd: i32) -> bool {
         if fd < 0 {
@@ -144,10 +196,11 @@ impl VirtualFileSystem {
     /// Returns whether the file pointer is at the end of the file.
     pub fn file_pointer_at_eof(&self, fp: &FilePointer) -> bool {
         match &fp.file {
-            FileType::Stdin => self.stdin.len() == 0,
+            FileType::Stdin => self.stdin.len() == 0 || fp.position >= self.stdin.len(),
             FileType::Stdout => false,
             FileType::Named(name) => {
                 let buffer = self.data.get(name).unwrap();
+                println!("      -- checking if at eof: {} >= {}  ({:?})", fp.position, buffer.len(), fp);
                 fp.position >= buffer.len()
             }
         }
@@ -233,6 +286,8 @@ pub(crate) enum FileType<T> {
     Named(T),
 }
 
+/// A `FilePointer` is an object that keeps track of the name of a file and the current read position
+/// in the file. The actual contents of the file is stored in a different place.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct FilePointer {
     pub file: FileType<String>,
@@ -242,6 +297,7 @@ pub(crate) struct FilePointer {
 }
 
 impl FilePointer {
+    /// Create a new file pointer to stdin.
     fn new_stdin() -> Self {
         Self {
             file: FileType::Stdin,
@@ -249,6 +305,7 @@ impl FilePointer {
             erstat: 0,
         }
     }
+    /// Create a new file pointer to stdout.
     fn new_stdout() -> Self {
         Self {
             file: FileType::Stdout,
@@ -256,11 +313,21 @@ impl FilePointer {
             erstat: 0,
         }
     }
+    /// Create a new file point with the given name.
     fn new_named<T: Into<String>>(name: T) -> Self {
         Self {
             file: FileType::Named(name.into()),
             position: 0,
             erstat: 0,
+        }
+    }
+    /// Create a new file point with the given name and set the erstat to 1.
+    /// This is used when opening a file that does not exist.
+    fn new_named_with_erstat<T: Into<String>>(name: T) -> Self {
+        Self {
+            file: FileType::Named(name.into()),
+            position: 0,
+            erstat: 1,
         }
     }
 }

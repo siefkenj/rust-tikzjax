@@ -85,7 +85,7 @@ impl TexJaxImports {
             erstat: Func::wrap(&mut *store, |mut caller: Caller<_>, fd: i32| -> i32 {
                 let vfs: &mut VirtualFileSystem = caller.data_mut();
                 let fp = vfs.get_file_pointer_by_index(fd).unwrap();
-                println!("[erstat] {:?}", fp.file);
+                println!("[erstat] {} {} {:?}", fd, fp.erstat, fp.file);
                 fp.erstat
             }),
             get: Func::wrap(
@@ -93,6 +93,11 @@ impl TexJaxImports {
                 |mut caller: Caller<_>, fd: i32, pointer: u32, length: u32| {
                     let mem = caller.get_export("0").unwrap().into_memory().unwrap();
 
+                    let fp = {
+                        let vfs: &mut VirtualFileSystem = caller.data_mut();
+                        vfs.get_file_pointer_by_index(fd).unwrap()
+                    }
+                    .clone();
                     let file_contents = {
                         let vfs: &mut VirtualFileSystem = caller.data_mut();
                         vfs.read_from_file_by_index(fd, length as usize)
@@ -106,8 +111,8 @@ impl TexJaxImports {
                     }
 
                     println!(
-                        "[get] {} {} {} contents: {:?}",
-                        fd, pointer, length, &file_contents
+                        "[get] {} {} {} contents: {:?} {:?}",
+                        fd, pointer, length, &file_contents, fp
                     );
                 },
             ),
@@ -198,11 +203,17 @@ impl TexJaxImports {
                                 .as_slice(),
                         );
                     }
+                    println!(
+                        "   [input_ln] first_char: {:?} {:?}",
+                        String::from_utf8_lossy(&first_char),
+                        &first_char
+                    );
                     if let Some(&b'\n') = first_char.last() {
                         first_char.clear();
                     }
 
                     let vfs: &mut VirtualFileSystem = caller.data_mut();
+                    let file_len = vfs.get_length(fd);
 
                     // If we are at the end of the file, we need to return early.
                     if vfs.at_eof_by_index(fd) {
@@ -225,9 +236,10 @@ impl TexJaxImports {
 
                     //dbg!(String::from_utf8_lossy(&input_line));
 
+                    let _first = get_first(&caller);
                     mem.write(
                         &mut caller,
-                        (buf_pointer + first_pointer) as usize,
+                        (buf_pointer + _first as i32) as usize,
                         &input_line,
                     )
                     .expect("Failed to write to memory");
@@ -238,6 +250,27 @@ impl TexJaxImports {
 
                     // `last` is supposed to point to the last non-space character in the buffer.
                     let last = first + input_line.len() as u32 + 1;
+                    let last = if last >= file_len as u32 {
+                        file_len as u32 - 1
+                    } else {
+                        last
+                    };
+
+                    {
+                        let vfs: &mut VirtualFileSystem = caller.data_mut();
+                        println!(
+                            "   [input_ln] at_eof = {} file_len = {} (file {:?})",
+                            vfs.at_eof_by_index(fd),
+                            vfs.get_length(fd),
+                            vfs.get_file_pointer_by_index(fd)
+                        );
+                        let byte_at_end_of_line = vfs.get_file_byte(fd, last as usize);
+                        println!(
+                            "   [input_ln] byte_at_end_of_file: {} {:?}",
+                            byte_at_end_of_line,
+                            String::from_utf8_lossy(&[byte_at_end_of_line])
+                        );
+                    }
                     set_last(last, &mut caller);
 
                     println!(
@@ -324,11 +357,11 @@ impl TexJaxImports {
                     };
 
                     println!(
-                        "[reset] Requesting file '{file_name}' returned descriptor to {file:?}"
+                        "[reset] {length} {pointer} Requesting file '{file_name}' returned descriptor to {file:?}",
                     );
 
                     let vfs: &mut VirtualFileSystem = caller.data_mut();
-                    vfs.get_file_descriptor(file) as i32
+                    vfs.get_file_descriptor(file, true) as i32
                 },
             ),
             rewrite: Func::wrap(
@@ -349,7 +382,7 @@ impl TexJaxImports {
                     );
 
                     let vfs: &mut VirtualFileSystem = caller.data_mut();
-                    vfs.get_file_descriptor(file) as u32
+                    vfs.get_file_descriptor(file, false) as u32
                 },
             ),
             tex_final_end: Func::wrap(&mut *store, || {
