@@ -38,7 +38,7 @@ fn main() -> Result<()> {
     // Extract these files to memory.
     let extracted_files = extract_tar_gz_to_memory(TEX_FILE_BYTES)?;
     let mut filesystem = VirtualFileSystem::new(extracted_files);
-    filesystem.set_stdin(" input.tex \n\\end\n".as_bytes());
+    filesystem.set_stdin(" input.tex ".as_bytes());
 
     // First step is to create the Wasm execution engine with some config.
     // In this example we are using the default configuration.

@@ -144,7 +144,7 @@ impl TexJaxImports {
                  buf_size: i32|
                  -> i32 {
                     println!(
-                        "[input_ln] {} {} {} {} {} {} {}",
+                        "[input_ln]: fd: {}, bypass_eoln: {}, buf_pointer: {}, first_pointer: {}, last_pointer: {}, max_buf_stack_pointer: {}, buf_size: {}",
                         fd,
                         bypass_eoln,
                         buf_pointer,

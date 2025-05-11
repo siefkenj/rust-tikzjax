@@ -528,4 +528,30 @@ mod tests {
         let length = fs.get_length(fd as i32);
         assert_eq!(length, 12); // "Test content" is 12 bytes
     }
+
+    #[test]
+    fn test_parsing_default_input_txt() {
+        let mut fs = VirtualFileSystem::new(HashMap::new());
+
+        // Create a file with some content
+        let fd = fs.get_file_descriptor(FileType::Named("input.tex"), false);
+
+        // Check file length
+        let length = fs.get_length(fd as i32);
+        assert_eq!(length, 96); // "Test content" is 12 bytes
+
+        // Check file contents
+        let contents = fs.read_from_file_by_index(fd as i32, length);
+        assert_eq!(contents, b"\n\\begin{document}\n\\begin{tikzpicture}\n\\draw (0,0) circle (1in);\n\\end{tikzpicture}\n\\end{document}");
+
+        // check print_newline with next_newline_offset_by_index
+        if let Some(fp) = fs.get_file_pointer_by_index_mut(fd as i32) {
+            fp.position = 0;
+            let offset = fs.next_newline_offset_by_index(fd as i32);
+            assert_eq!(offset, Some(10));
+            fs.advance_file_pointer(fd as i32, 10);
+            let offset = fs.next_newline_offset_by_index(fd as i32);
+            assert_eq!(offset, Some(26));
+        }
+    }
 }
