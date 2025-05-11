@@ -342,7 +342,6 @@ impl TexJaxImports {
             ),
             tex_final_end: Func::wrap(&mut *store, || {
                 // This is a no-op since we have no need to finalize anything.
-                println!("[tex_final_end]");
             }),
         }
     }

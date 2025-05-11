@@ -1,6 +1,5 @@
 use std::{collections::HashMap, io::Read};
 // XXX: remove later
-    use std::fs::File;
 use std::io::Write;
 
 use anyhow::Result;
@@ -45,43 +44,29 @@ fn extract_tar_gz_to_memory(bytes: &[u8]) -> Result<HashMap<String, Vec<u8>>> {
 fn main() -> Result<()> {
     // We have an in-memory file structure populated with the files that tex needs to run.
     // Extract these files to memory.
-    let extracted_files = extract_tar_gz_to_memory(TEX_FILE_BYTES)?;
+    let mut extracted_files = extract_tar_gz_to_memory(TEX_FILE_BYTES)?;
+    // Add `input.tex` to the in-memory file structure.
+    // This is the file that TeX will execute.
+    extracted_files.insert("input.tex".to_string(), b"\n\\begin{document}\n\\begin{tikzpicture}\n\\draw (0,0) circle (1in);\n\\end{tikzpicture}\n\\end{document}".to_vec());
     let mut filesystem = VirtualFileSystem::new(extracted_files);
     filesystem.set_stdin(" input.tex \n\\end\n".as_bytes());
 
     // First step is to create the Wasm execution engine with some config.
     // In this example we are using the default configuration.
     let engine = Engine::default();
-    //let wat = r#"
-    //    (module
-    //        (import "host" "hello" (func $host_hello (param i32)))
-    //        (func (export "hello")
-    //            (call $host_hello (i32.const 3))
-    //        )
-    //    )
-    //"#;
-    //// Wasmi does not yet support parsing `.wat` so we have to convert
-    //// out `.wat` into `.wasm` before we compile and validate it.
-    //let wasm = wat::parse_str(&wat)?;
     let module = Module::new(&engine, WASM_BYTES)?;
 
     // All Wasm objects operate within the context of a `Store`.
-    // Each `Store` has a type parameter to store host-specific data,
-    // which in this case we are using `42` for.
+    // Each `Store` has a type parameter to store host-specific data.
     type HostState = VirtualFileSystem;
     let mut store = Store::new(&engine, filesystem);
-    //let host_hello = Func::wrap(&mut store, |caller: Caller<'_, HostState>, param: i32| {
-    //    println!("Got {param} from WebAssembly");
-    //    println!("My host state is: {}", caller.data());
-    //});
+    // 1100 pages is taken from the tikzjax Javascript code.
     let memory = Memory::new(&mut store, MemoryType::new(1100, Some(1100))?)?;
     memory.write(&mut store, 0, CORE_BYTES)?;
 
     let imports = TexJaxImports::new(&mut store);
 
-    // In order to create Wasm module instances and link their imports
-    // and exports we require a `Linker`.
-    // Create a linker and define all imports as no-op functions.
+    // Create a linker and define all imports as coming from our rust library.
     let mut linker = <Linker<HostState>>::new(&engine);
     linker.define("library", "printInteger", imports.print_integer)?;
     linker.define("library", "printChar", imports.print_char)?;
@@ -107,15 +92,15 @@ fn main() -> Result<()> {
     let instance = linker.instantiate(&mut store, &module)?.start(&mut store)?;
     let main_func = instance.get_typed_func::<(), ()>(&store, "main")?;
     main_func.call(&mut store, ())?;
-    
+
     // Print stdout at this point so we know what happened.
     let stdout = store.data().get_stdout();
     println!("\n\nGOT THE FOLLOWING TEX OUTPUT:\n\n{}", stdout);
-    
+
     let input_dvi = store.data().get_file_contents(FileType::Named("input.dvi"));
     let input_dvi_text = String::from_utf8_lossy(&input_dvi.unwrap());
     println!("\n\nGOT THE FOLLOWING DVI OUTPUT:\n\n{}", input_dvi_text);
-    
+
     //let input_dvi = store.data().get_file_contents(FileType::Named("input.log"));
     //let input_dvi_text = String::from_utf8_lossy(&input_dvi.unwrap());
     //println!("\n\nGOT THE FOLLOWING LOG OUTPUT:\n\n{}", input_dvi_text);
@@ -123,20 +108,6 @@ fn main() -> Result<()> {
     // Write the content of input_dvi to a file as bytes
     let mut file = std::fs::File::create("input.dvi")?;
     file.write_all(&input_dvi.unwrap())?;
-
-
-
-    // Instantiation of a Wasm module requires defining its imports and then
-    // afterwards we can fetch exports by name, as well as asserting the
-    // type signature of the function with `get_typed_func`.
-    //
-    // Also before using an instance created this way we need to start it.
-    //linker.define("host", "hello", host_hello)?;
-    //let instance = linker.instantiate(&mut store, &module)?.start(&mut store)?;
-    //let hello = instance.get_typed_func::<(), ()>(&store, "hello")?;
-
-    //// And finally we can call the wasm!
-    //hello.call(&mut store, ())?;
 
     Ok(())
 }

@@ -16,6 +16,7 @@ pub(crate) struct VirtualFileSystem {
 /// How a file is currently being read (in bytes mode, as raw data, or in
 /// text mode). This is meant to mimic Pascal's read modes, even though all our
 /// data is stored as bytes.
+#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum ReadMode {
     Bytes,
@@ -25,9 +26,6 @@ pub(crate) enum ReadMode {
 impl VirtualFileSystem {
     /// Create a new virtual file system initialized with the files in `data`.
     pub fn new(data: HashMap<String, Vec<u8>>) -> Self {
-        let mut data = data;
-        data.insert("input.tex".to_string(), b"\n\\begin{document}\n\\begin{tikzpicture}\n\\draw (0,0) circle (1in);\n\\end{tikzpicture}\n\\end{document}".to_vec());
-        //data.insert("input.tex".to_string(), b"\n\\begin{document}\n$x^2$\n\\end{document}".to_vec());
         Self {
             data,
             stdin: Vec::new(),
