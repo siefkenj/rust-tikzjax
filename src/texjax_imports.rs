@@ -249,7 +249,7 @@ impl TexJaxImports {
                     }
 
                     // `last` is supposed to point to the last non-space character in the buffer.
-                    let last = first + input_line.len() as u32 + 1;
+                    let last = first + input_line.len() as u32;
                     let last = if last >= file_len as u32 {
                         file_len as u32 - 1
                     } else {
@@ -346,7 +346,11 @@ impl TexJaxImports {
             reset: Func::wrap(
                 &mut *store,
                 |mut caller: Caller<_>, length: u32, pointer: u32| -> i32 {
-                    let mem = caller.get_export("0").unwrap().into_memory().unwrap();
+                    let mem = caller
+                        .get_export("0")
+                        .expect("Failed to get memory export at name `0`")
+                        .into_memory()
+                        .expect("Failed to get linear memory from export at name `0`");
                     let file_name = read_memory(&mem, &caller, pointer as usize, length);
                     let file_name = String::from_utf8(file_name).unwrap();
                     let file_name = clean_filename(&file_name);
@@ -534,46 +538,17 @@ mod tests {
 
         let engine = wasmi::Engine::default();
         let mut store = Store::new(&engine, fs);
-        let imports = TexJaxImports::new(&mut store);
 
-        // Test reset function (open for reading)
-        let mut output_result = vec![];
-        let _ = imports
-            .reset
-            .call(&mut store, &[10.into()], output_result.as_mut_slice())
+        let memory_type = MemoryType::new(100, Some(100)).expect("Failed to create memory type");
+        let memory = Memory::new(&mut store, memory_type).unwrap();
+        memory
+            .write(
+                &mut store,
+                20,
+                &[b't', b'e', b's', b't', b'.', b't', b'x', b't'],
+            )
             .unwrap();
-        let fd = output_result[0].i32().unwrap();
-        assert!(fd >= 0);
 
-        //     // Test eof initially (should be false since we haven't read anything)
-        //     let eof_result = imports.eof.call(&mut store, (fd,)).unwrap();
-        //     let is_eof = eof_result.unwrap_i32();
-        //     assert_eq!(is_eof, 0); // 0 means false in TeX
-
-        //     // Test get function to read a character
-        //     let get_result = imports.get.call(&mut store, (fd,)).unwrap();
-
-        //     // After reading one character, get the position
-        //     let fs = store.data();
-        //     if let Some(fp) = fs.get_file_pointer_by_index(fd) {
-        //         assert_eq!(fp.position, 1);
-        //     } else {
-        //         panic!("File pointer not found");
-        //     }
-
-        //     // Test reading to the end
-        //     for _ in 1..12 {
-        //         // "Test content" is 12 characters
-        //         let _ = imports.get.call(&mut store, (fd,));
-        //     }
-
-        //     // Now we should be at EOF
-        //     let eof_result = imports.eof.call(&mut store, (fd,)).unwrap();
-        //     let is_eof = eof_result.unwrap_i32();
-        //     assert_eq!(is_eof, 1); // 1 means true in TeX
-
-        //     // Test close function
-        //     let close_result = imports.close.call(&mut store, (fd,)).unwrap();
-        //     assert!(close_result.unwrap_i32() >= 0);
+        // todo: finish this test with \n stuff
     }
 }

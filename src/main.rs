@@ -103,5 +103,13 @@ fn main() -> Result<()> {
     //// And finally we can call the wasm!
     main_proper.call(&mut store, ())?;
 
+    // Lets get 'input.dvi' and print it out - call the pascal equivalent `reset` and `get`
+    let vfs = store.data();
+    let file_descriptor = vfs.raw_path_access("input.dvi");
+    println!(
+        "\n\nGOT THE FOLLOWING DVI OUTPUT:\n\n{}",
+        String::from_utf8_lossy(&file_descriptor)
+    );
+
     Ok(())
 }

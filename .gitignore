@@ -4,3 +4,4 @@ node_modules
 node-tikzjax
 tex.pdf
 .cspell
+**/tex_files/
