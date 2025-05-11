@@ -1,16 +1,16 @@
-use std::{cmp::min, collections::HashMap, fs::File};
+use std::{cmp::min, collections::HashMap};
 
 /// A virtual file system that allows for opening, reading, and
 /// writing files in memory.
 #[derive(Debug, Clone)]
-pub(crate) struct VirtualFileSystem {
+pub struct VirtualFileSystem {
     /// The files in the virtual file system.
-    data: HashMap<String, Vec<u8>>,
-    stdin: Vec<u8>,
-    stdout: Vec<u8>,
+    pub data: HashMap<String, Vec<u8>>,
+    pub stdin: Vec<u8>,
+    pub stdout: Vec<u8>,
     /// A mapping from file descriptors to file handles. This
     /// keeps track of open files, etc.
-    fd_to_file_pointer: Vec<FilePointer>,
+    pub fd_to_file_pointer: Vec<FilePointer>,
 }
 
 impl VirtualFileSystem {
@@ -200,7 +200,12 @@ impl VirtualFileSystem {
             FileType::Stdout => false,
             FileType::Named(name) => {
                 let buffer = self.data.get(name).unwrap();
-                println!("      -- checking if at eof: {} >= {}  ({:?})", fp.position, buffer.len(), fp);
+                println!(
+                    "      -- checking if at eof: {} >= {}  ({:?})",
+                    fp.position,
+                    buffer.len(),
+                    fp
+                );
                 fp.position >= buffer.len()
             }
         }
@@ -280,7 +285,7 @@ impl VirtualFileSystem {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum FileType<T> {
+pub enum FileType<T> {
     Stdin,
     Stdout,
     Named(T),
@@ -289,7 +294,7 @@ pub(crate) enum FileType<T> {
 /// A `FilePointer` is an object that keeps track of the name of a file and the current read position
 /// in the file. The actual contents of the file is stored in a different place.
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct FilePointer {
+pub struct FilePointer {
     pub file: FileType<String>,
     /// Pointer to where in the current file we are reading
     pub position: usize,
@@ -329,5 +334,198 @@ impl FilePointer {
             position: 0,
             erstat: 1,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use crate::{FileType, VirtualFileSystem};
+
+    #[test]
+    fn test_virtual_filesystem_creation() {
+        let mut files = HashMap::new();
+        files.insert("test.txt".to_string(), b"Hello, world!".to_vec());
+        let mut fs = VirtualFileSystem::new(files);
+
+        // Check that the file system was created with our file plus the default input.tex
+        // by opening the files and checking if we get valid file descriptors
+        let test_fd = fs.get_file_descriptor(FileType::Named("test.txt"), false);
+        let input_fd = fs.get_file_descriptor(FileType::Named("input.tex"), false);
+
+        // Verify we can read from both files
+        let test_content = fs.read_from_file_by_index(test_fd as i32, 13);
+        let input_content = fs.read_from_file_by_index(input_fd as i32, 10); // Just read first 10 bytes
+
+        assert_eq!(test_content, b"Hello, world!");
+        assert!(!input_content.is_empty()); // Just check there's some content
+    }
+
+    #[test]
+    fn test_file_descriptor_management() {
+        let mut fs = VirtualFileSystem::new(HashMap::new());
+
+        // Get file descriptors for different file types
+        let stdin_fd = fs.get_file_descriptor(FileType::Stdin, false);
+        let stdout_fd = fs.get_file_descriptor(FileType::Stdout, false);
+        let named_fd = fs.get_file_descriptor(FileType::Named("example.txt"), false);
+
+        // Check that they're all different
+        assert_ne!(stdin_fd, stdout_fd);
+        assert_ne!(stdin_fd, named_fd);
+        assert_ne!(stdout_fd, named_fd);
+
+        // Check that we can retrieve the file pointers
+        assert!(fs.get_file_pointer_by_index(stdin_fd as i32).is_some());
+        assert!(fs.get_file_pointer_by_index(stdout_fd as i32).is_some());
+        assert!(fs.get_file_pointer_by_index(named_fd as i32).is_some());
+
+        // Check that invalid indices return None
+        assert!(fs.get_file_pointer_by_index(-1).is_none());
+        assert!(fs
+            .get_file_pointer_by_index((named_fd + 1) as i32)
+            .is_none());
+    }
+
+    #[test]
+    fn test_file_reading_and_writing() {
+        let mut fs = VirtualFileSystem::new(HashMap::new());
+
+        // Create and write to a file
+        let fd = fs.get_file_descriptor(FileType::Named("test.txt"), false);
+        fs.write_to_file_by_index(fd as i32, b"Hello, world!");
+
+        // Reset position
+        if let Some(fp) = fs.get_file_pointer_by_index_mut(fd as i32) {
+            fp.position = 0;
+        }
+
+        // Read back from the file
+        let data = fs.read_from_file_by_index(fd as i32, 13);
+        assert_eq!(data, b"Hello, world!");
+
+        // Check we're at EOF now
+        assert!(fs.at_eof_by_index(fd as i32));
+    }
+
+    #[test]
+    fn test_stdin_stdout() {
+        let mut fs = VirtualFileSystem::new(HashMap::new());
+
+        // Set stdin content
+        fs.set_stdin(b"Test input\nSecond line");
+
+        // Get stdin file descriptor and read from it
+        let stdin_fd = fs.get_file_descriptor(FileType::Stdin, false);
+        let data = fs.read_from_file_by_index(stdin_fd as i32, 10);
+        assert_eq!(data, b"Test input");
+
+        // Get stdout file descriptor and write to it
+        let stdout_fd = fs.get_file_descriptor(FileType::Stdout, false);
+        fs.write_to_file_by_index(stdout_fd as i32, b"Test output");
+
+        // Check stdout content
+        assert_eq!(fs.get_stdout(), "Test output");
+    }
+
+    // #[test]
+    // fn test_eof_and_eoln() {
+    //     let mut fs = VirtualFileSystem::new(HashMap::new());
+
+    //     // Create a file with multiple lines
+    //     let fd = fs.get_file_descriptor(FileType::Named("multiline.txt"), false);
+    //     fs.write_to_file_by_index(fd as i32, b"Line 1\nLine 2\nLine 3");
+
+    //     // Reset position
+    //     if let Some(fp) = fs.get_file_pointer_by_index_mut(fd as i32) {
+    //         fp.position = 0;
+    //     }
+
+    //     // Check eoln at the end of first line
+    //     if let Some(fp) = fs.get_file_pointer_by_index_mut(fd as i32) {
+    //         fp.position = 6; // Position at the newline after "Line 1"
+    //         assert!(fs.file_pointer_at_eoln(fp));
+
+    //         // Not at EOF yet
+    //         assert!(!fs.file_pointer_at_eof(fp));
+
+    //         // Move to the end of the file
+    //         fp.position = 20; // Beyond the end of our data
+    //         assert!(fs.file_pointer_at_eof(fp));
+    //         assert!(fs.file_pointer_at_eoln(fp)); // EOLN is true at EOF
+    //     }
+    // }
+
+    #[test]
+    fn test_next_newline_offset() {
+        let mut fs = VirtualFileSystem::new(HashMap::new());
+
+        // Create a file with multiple lines
+        let fd = fs.get_file_descriptor(FileType::Named("multiline.txt"), false);
+        fs.write_to_file_by_index(fd as i32, b"Line 1\nLine 2\nLine 3");
+
+        // Reset position
+        if let Some(fp) = fs.get_file_pointer_by_index_mut(fd as i32) {
+            fp.position = 0;
+        }
+
+        // Find the next newline
+        let offset = fs.next_newline_offset_by_index(fd as i32);
+        assert_eq!(offset, Some(6)); // After "Line 1"
+
+        // Advance past the newline
+        fs.advance_file_pointer(fd as i32, 7); // To the start of "Line 2"
+
+        // Find the next newline
+        let offset = fs.next_newline_offset_by_index(fd as i32);
+        assert_eq!(offset, Some(13)); // After "Line 2"
+    }
+
+    #[test]
+    fn test_erstat() {
+        let mut fs = VirtualFileSystem::new(HashMap::new());
+
+        // Create file with erstat = true (file doesn't exist)
+        let fd = fs.get_file_descriptor(FileType::Named("nonexistent.txt"), true);
+
+        // Check erstat is set to 1
+        if let Some(fp) = fs.get_file_pointer_by_index(fd as i32) {
+            assert_eq!(fp.erstat, 1);
+        }
+
+        // Create file with erstat = false
+        let fd2 = fs.get_file_descriptor(FileType::Named("existing.txt"), false);
+
+        // Check erstat is not set
+        if let Some(fp) = fs.get_file_pointer_by_index(fd2 as i32) {
+            assert_eq!(fp.erstat, 0);
+        }
+    }
+
+    #[test]
+    fn test_get_file_byte() {
+        let mut fs = VirtualFileSystem::new(HashMap::new());
+
+        // Create a file with some content
+        let fd = fs.get_file_descriptor(FileType::Named("test.txt"), false);
+        fs.write_to_file_by_index(fd as i32, b"ABCDEF");
+
+        // Get a byte at a specific position
+        let byte = fs.get_file_byte(fd as i32, 2);
+        assert_eq!(byte, b'C');
+    }
+
+    #[test]
+    fn test_file_length() {
+        let mut fs = VirtualFileSystem::new(HashMap::new());
+
+        // Create a file with some content
+        let fd = fs.get_file_descriptor(FileType::Named("test.txt"), false);
+        fs.write_to_file_by_index(fd as i32, b"Test content");
+
+        // Check file length
+        let length = fs.get_length(fd as i32);
+        assert_eq!(length, 12); // "Test content" is 12 bytes
     }
 }

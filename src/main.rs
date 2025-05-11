@@ -5,14 +5,8 @@ use flate2::read::GzDecoder;
 use tar::Archive;
 use wasmi::*;
 
-mod texjax_imports;
-use texjax_imports::*;
-mod filesystem;
-use filesystem::*;
-
-const TEX_FILE_BYTES: &[u8] = include_bytes!("./assets/tex_files.tar.gz");
-const WASM_BYTES: &[u8] = include_bytes!("./assets/tex.wasm");
-const CORE_BYTES: &[u8] = include_bytes!("./assets/core.dump");
+// Use modules from lib.rs
+use rust_tikz::{filesystem::*, texjax_imports::*, CORE_BYTES, TEX_FILE_BYTES, WASM_BYTES};
 
 fn extract_tar_gz_to_memory(bytes: &[u8]) -> Result<HashMap<String, Vec<u8>>> {
     // Create a GzDecoder to decompress the .tar.gz file
@@ -49,28 +43,17 @@ fn main() -> Result<()> {
     // First step is to create the Wasm execution engine with some config.
     // In this example we are using the default configuration.
     let engine = Engine::default();
-    //let wat = r#"
-    //    (module
-    //        (import "host" "hello" (func $host_hello (param i32)))
-    //        (func (export "hello")
-    //            (call $host_hello (i32.const 3))
-    //        )
-    //    )
-    //"#;
     //// Wasmi does not yet support parsing `.wat` so we have to convert
     //// out `.wat` into `.wasm` before we compile and validate it.
-    //let wasm = wat::parse_str(&wat)?;
     let module = Module::new(&engine, WASM_BYTES)?;
 
     // All Wasm objects operate within the context of a `Store`.
     // Each `Store` has a type parameter to store host-specific data,
     // which in this case we are using `42` for.
     type HostState = VirtualFileSystem;
+    // Now we can compile the above Wasm module with the given Wasm source.
+
     let mut store = Store::new(&engine, filesystem);
-    //let host_hello = Func::wrap(&mut store, |caller: Caller<'_, HostState>, param: i32| {
-    //    println!("Got {param} from WebAssembly");
-    //    println!("My host state is: {}", caller.data());
-    //});
     let memory = Memory::new(&mut store, MemoryType::new(1100, Some(1100))?)?;
     memory.write(&mut store, 0, CORE_BYTES)?;
 
@@ -104,23 +87,21 @@ fn main() -> Result<()> {
     let instance = linker.instantiate(&mut store, &module)?.start(&mut store)?;
     let main_func = instance.get_typed_func::<(), ()>(&store, "main")?;
     main_func.call(&mut store, ())?;
-    
+
     // Print stdout at this point so we know what happened.
     let stdout = store.data().get_stdout();
     println!("\n\nGOT THE FOLLOWING TEX OUTPUT:\n\n{}", stdout);
-
 
     // Instantiation of a Wasm module requires defining its imports and then
     // afterwards we can fetch exports by name, as well as asserting the
     // type signature of the function with `get_typed_func`.
     //
     // Also before using an instance created this way we need to start it.
-    //linker.define("host", "hello", host_hello)?;
-    //let instance = linker.instantiate(&mut store, &module)?.start(&mut store)?;
-    //let hello = instance.get_typed_func::<(), ()>(&store, "hello")?;
+    let instance = linker.instantiate(&mut store, &module)?.start(&mut store)?;
+    let main_proper = instance.get_typed_func::<(), ()>(&store, "main")?;
 
     //// And finally we can call the wasm!
-    //hello.call(&mut store, ())?;
+    main_proper.call(&mut store, ())?;
 
     Ok(())
 }

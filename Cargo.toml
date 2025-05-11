@@ -3,6 +3,14 @@ name = "rust-tikz"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "rust_tikz"
+path = "src/lib.rs"
+
+[[bin]]
+name = "rust-tikz"
+path = "src/main.rs"
+
 [dependencies]
 anyhow = "1.0.92"
 flate2 = "1.0.34"

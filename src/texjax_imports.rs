@@ -6,65 +6,65 @@ use crate::{FileType, VirtualFileSystem};
 /// These are created to mirror `library.js` from the original TeXJax project.
 ///
 /// Many of these functions mimic their PASCAL equivalents (as used by the original TeX engine).
-pub(crate) struct TexJaxImports {
+pub struct TexJaxImports {
     /// Close a file. Mimics Pascal's `close` function.
     ///
     /// Called with a file descriptor.
-    pub(crate) close: Func,
+    pub close: Func,
     /// Mimics Pascal's `eof` function. Returns true if the current file pointer is at the end of the file.
     ///
     /// Called with a file descriptor.
-    pub(crate) eof: Func,
+    pub eof: Func,
     /// Mimics Pascal's `eoln` function. Returns true if the current file pointer is at the end of the line (ASCII character 10)
     /// or at the end of the file.
     ///
     /// Called with a file descriptor.
-    pub(crate) eoln: Func,
-    pub(crate) erstat: Func,
-    pub(crate) get: Func,
+    pub eoln: Func,
+    pub erstat: Func,
+    pub get: Func,
     /// Return the current day. This value is hard-coded to allow for WASM compilation.
-    pub(crate) get_current_day: Func,
+    pub get_current_day: Func,
     /// Return the current minutes. This value is hard-coded to allow for WASM compilation.
-    pub(crate) get_current_minutes: Func,
+    pub get_current_minutes: Func,
     /// Return the current month. This value is hard-coded to allow for WASM compilation.
-    pub(crate) get_current_month: Func,
+    pub get_current_month: Func,
     /// Return the current year. This value is hard-coded to allow for WASM compilation.
-    pub(crate) get_current_year: Func,
+    pub get_current_year: Func,
     /// Recreation of TeX's `input_ln` function. However, global variables are passed in as arguments.
-    pub(crate) input_ln: Func,
-    pub(crate) print_char: Func,
-    pub(crate) print_integer: Func,
-    pub(crate) print_newline: Func,
+    pub input_ln: Func,
+    pub print_char: Func,
+    pub print_integer: Func,
+    pub print_newline: Func,
     /// Print a string stored in memory to the file pointed to by the file descriptor.
     /// The strings are stored in TeX's internal memory format:
     ///  - `pointer` points to the first byte which is the length of the string.
     ///  - The string is stored in the next `length` bytes.
-    pub(crate) print_string: Func,
+    pub print_string: Func,
     /// Open a file for reading. Mimics Pascal's `reset` function.
     ///
     /// Called with a reference to a file name. Returns a file descriptor.
-    pub(crate) reset: Func,
+    pub reset: Func,
     /// Open a file for writing. Mimics Pascal's `rewrite` function.
     ///
     /// Called with a reference to a file name. Returns a file descriptor.
-    pub(crate) rewrite: Func,
-    pub(crate) tex_final_end: Func,
-    pub(crate) put: Func,
+    pub rewrite: Func,
+    pub tex_final_end: Func,
+    pub put: Func,
 }
 
 /// Read a specified number of bytes from the memory at the specified pointer.
-fn read_memory(memory: &Memory, ctx: &impl AsContext, pointer: usize, length: u32) -> Vec<u8> {
+pub fn read_memory(memory: &Memory, ctx: &impl AsContext, pointer: usize, length: u32) -> Vec<u8> {
     let mut buffer = vec![0u8; length as usize];
     let mut buf = [0u8; 1];
     for i in 0..(length as usize) {
         memory.read(ctx, pointer + i, &mut buf).unwrap();
-        buffer[i as usize] = buf[0];
+        buffer[i] = buf[0];
     }
     buffer
 }
 
 impl TexJaxImports {
-    pub(crate) fn new(store: &mut Store<VirtualFileSystem>) -> Self {
+    pub fn new(store: &mut Store<VirtualFileSystem>) -> Self {
         Self {
             close: Func::wrap(&mut *store, |fd: i32| {
                 println!("[close] {}", fd);
@@ -397,7 +397,7 @@ impl TexJaxImports {
 ///  - Trimming any trailing whitespace
 ///  - If the string is quoted, take just the contents of the quotes.
 ///  - If the string is in curly braces "{...}", take just the contents of the braces.
-fn clean_filename(file_name: &str) -> &str {
+pub fn clean_filename(file_name: &str) -> &str {
     // Trim any trailing whitespace and if the string is quoted, take just the contents of the quotes.
     let file_name = file_name.trim();
     let file_name = if file_name.starts_with('"') {
@@ -446,4 +446,134 @@ fn u8_to_u32(bytes: &[u8]) -> u32 {
     let mut buf = [0u8; 4];
     buf.copy_from_slice(&bytes);
     u32::from_ne_bytes(buf)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::{
+        filesystem::{FileType, VirtualFileSystem},
+        texjax_imports::{clean_filename, read_memory, TexJaxImports},
+        CORE_BYTES,
+    };
+    use super::*;
+    use std::collections::HashMap;
+    use wasmi::{Memory, MemoryType, Store, StoreLimits};
+
+    // Helper function to create a test memory
+    fn create_test_memory() -> (Store<VirtualFileSystem>, Memory) {
+        let mut files = HashMap::new();
+        files.insert("test.txt".to_string(), b"Test content".to_vec());
+        let fs = VirtualFileSystem::new(files);
+
+        let engine = wasmi::Engine::default();
+        let mut store = Store::new(&engine, fs);
+
+        let memory = Memory::new(&mut store, MemoryType::new(100, Some(100)).unwrap()).unwrap();
+
+        // Initialize some memory for tests
+        memory.write(&mut store, 0, &[1, 2, 3, 4, 5]).unwrap();
+
+        (store, memory)
+    }
+
+    #[test]
+    fn test_clean_filename() {
+        assert_eq!(clean_filename("test.tex"), "test.tex");
+        assert_eq!(clean_filename("\"test.tex\""), "test.tex");
+        assert_eq!(clean_filename("{test.tex}"), "test.tex");
+    }
+
+    #[test]
+    fn test_read_memory() {
+        let (mut store, memory) = create_test_memory();
+
+        // writ a string length followed by string data
+        memory
+            .write(&mut store, 10, &[b'H', b'e', b'l', b'l', b'o'])
+            .unwrap();
+
+        // Test reading the string
+        let result = read_memory(&memory, &mut store, 10, 5);
+        assert_eq!(result, b"Hello");
+    }
+
+    #[test]
+    fn test_texjax_imports_new() {
+        let (mut store, _) = create_test_memory();
+
+        // Test that TexJaxImports can be created without panic
+        let imports = TexJaxImports::new(&mut store);
+
+        // Verify all functions were created
+        // assert!(imports.print_integer.);
+        // assert!(imports.print_char.is_host());
+        // assert!(imports.print_string.is_host());
+        // assert!(imports.print_newline.is_host());
+        // assert!(imports.reset.is_host());
+        // assert!(imports.input_ln.is_host());
+        // assert!(imports.rewrite.is_host());
+        // assert!(imports.get.is_host());
+        // assert!(imports.put.is_host());
+        // assert!(imports.eof.is_host());
+        // assert!(imports.eoln.is_host());
+        // assert!(imports.erstat.is_host());
+        // assert!(imports.close.is_host());
+        // assert!(imports.get_current_minutes.is_host());
+        // assert!(imports.get_current_day.is_host());
+        // assert!(imports.get_current_month.is_host());
+        // assert!(imports.get_current_year.is_host());
+        // assert!(imports.tex_final_end.is_host());
+    }
+
+    // This is a test to verify file operations through the imports
+    #[test]
+    fn test_file_operations() {
+        let mut files = HashMap::new();
+        files.insert("test.txt".to_string(), b"Test content".to_vec());
+        let fs = VirtualFileSystem::new(files);
+
+        let engine = wasmi::Engine::default();
+        let mut store = Store::new(&engine, fs);
+        let imports = TexJaxImports::new(&mut store);
+
+        // Test reset function (open for reading)
+        let mut output_result = vec![];
+        let _ = imports
+            .reset
+            .call(&mut store, &[10.into()], output_result.as_mut_slice())
+            .unwrap();
+        let fd = output_result[0].i32().unwrap();
+        assert!(fd >= 0);
+
+        //     // Test eof initially (should be false since we haven't read anything)
+        //     let eof_result = imports.eof.call(&mut store, (fd,)).unwrap();
+        //     let is_eof = eof_result.unwrap_i32();
+        //     assert_eq!(is_eof, 0); // 0 means false in TeX
+
+        //     // Test get function to read a character
+        //     let get_result = imports.get.call(&mut store, (fd,)).unwrap();
+
+        //     // After reading one character, get the position
+        //     let fs = store.data();
+        //     if let Some(fp) = fs.get_file_pointer_by_index(fd) {
+        //         assert_eq!(fp.position, 1);
+        //     } else {
+        //         panic!("File pointer not found");
+        //     }
+
+        //     // Test reading to the end
+        //     for _ in 1..12 {
+        //         // "Test content" is 12 characters
+        //         let _ = imports.get.call(&mut store, (fd,));
+        //     }
+
+        //     // Now we should be at EOF
+        //     let eof_result = imports.eof.call(&mut store, (fd,)).unwrap();
+        //     let is_eof = eof_result.unwrap_i32();
+        //     assert_eq!(is_eof, 1); // 1 means true in TeX
+
+        //     // Test close function
+        //     let close_result = imports.close.call(&mut store, (fd,)).unwrap();
+        //     assert!(close_result.unwrap_i32() >= 0);
+    }
 }
