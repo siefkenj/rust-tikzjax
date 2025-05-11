@@ -1,6 +1,6 @@
 use wasmi::*;
 
-use crate::{FileType, VirtualFileSystem};
+use crate::{FileType, ReadMode, VirtualFileSystem};
 
 /// All the functions that are imported by the TeXJax WebAssembly module.
 /// These are created to mirror `library.js` from the original TeXJax project.
@@ -66,26 +66,25 @@ fn read_memory(memory: &Memory, ctx: &impl AsContext, pointer: usize, length: u3
 impl TexJaxImports {
     pub(crate) fn new(store: &mut Store<VirtualFileSystem>) -> Self {
         Self {
-            close: Func::wrap(&mut *store, |fd: i32| {
-                println!("[close] {}", fd);
+            close: Func::wrap(&mut *store, |_fd: i32| {
                 // We don't need to close files, so this is a no-op.
             }),
             eof: Func::wrap(&mut *store, |mut caller: Caller<_>, fd: i32| -> i32 {
                 let vfs: &mut VirtualFileSystem = caller.data_mut();
                 let fp = vfs.get_file_pointer_by_index(fd).unwrap();
-                println!("[eof] {:?}: {}", fp.file, vfs.file_pointer_at_eof(fp));
+                //println!("[eof] {:?}: {}", fp.file, vfs.file_pointer_at_eof(fp));
                 vfs.file_pointer_at_eof(fp) as i32
             }),
-            eoln: Func::wrap(&mut *store, |mut caller: Caller<_>, a: i32| -> i32 {
+            eoln: Func::wrap(&mut *store, |mut caller: Caller<_>, fd: i32| -> i32 {
                 let vfs: &mut VirtualFileSystem = caller.data_mut();
-                let fp = vfs.get_file_pointer_by_index(a).unwrap();
-                println!("[eoln] {:?}: {}", fp.file, vfs.file_pointer_at_eoln(fp));
+                let fp = vfs.get_file_pointer_by_index(fd).unwrap();
+                //println!("[eoln] {:?}: {}", fp.file, vfs.file_pointer_at_eoln(fp));
                 vfs.file_pointer_at_eoln(fp) as i32
             }),
             erstat: Func::wrap(&mut *store, |mut caller: Caller<_>, fd: i32| -> i32 {
                 let vfs: &mut VirtualFileSystem = caller.data_mut();
                 let fp = vfs.get_file_pointer_by_index(fd).unwrap();
-                println!("[erstat] {} {} {:?}", fd, fp.erstat, fp.file);
+                //println!("[erstat] {} {} {:?}", fd, fp.erstat, fp.file);
                 fp.erstat
             }),
             get: Func::wrap(
@@ -93,14 +92,9 @@ impl TexJaxImports {
                 |mut caller: Caller<_>, fd: i32, pointer: u32, length: u32| {
                     let mem = caller.get_export("0").unwrap().into_memory().unwrap();
 
-                    let fp = {
-                        let vfs: &mut VirtualFileSystem = caller.data_mut();
-                        vfs.get_file_pointer_by_index(fd).unwrap()
-                    }
-                    .clone();
                     let file_contents = {
                         let vfs: &mut VirtualFileSystem = caller.data_mut();
-                        vfs.read_from_file_by_index(fd, length as usize)
+                        vfs.read_from_file_by_index(fd, length as usize, ReadMode::Bytes)
                     };
                     if file_contents.len() == 0 {
                         mem.write(&mut caller, pointer as usize, &[0])
@@ -110,26 +104,31 @@ impl TexJaxImports {
                             .expect("Failed to write to memory");
                     }
 
-                    println!(
-                        "[get] {} {} {} contents: {:?} {:?}",
-                        fd, pointer, length, &file_contents, fp
-                    );
+                    //let fp = {
+                    //    let vfs: &mut VirtualFileSystem = caller.data_mut();
+                    //    vfs.get_file_pointer_by_index(fd).unwrap()
+                    //}
+                    //.clone();
+                    //println!(
+                    //    "[get] {} {} {} contents: {:?} fp at end {:?}",
+                    //    fd, pointer, length, &file_contents, fp
+                    //);
                 },
             ),
             get_current_day: Func::wrap(&mut *store, || -> i32 {
-                println!("[get_current_day]");
+                //println!("[get_current_day]");
                 1
             }),
             get_current_minutes: Func::wrap(&mut *store, || -> i32 {
-                println!("[get_current_minutes]");
+                //println!("[get_current_minutes]");
                 0
             }),
             get_current_month: Func::wrap(&mut *store, || -> i32 {
-                println!("[get_current_month]");
+                //println!("[get_current_month]");
                 1
             }),
             get_current_year: Func::wrap(&mut *store, || -> i32 {
-                println!("[get_current_year]");
+                //println!("[get_current_year]");
                 1970
             }),
             input_ln: Func::wrap(
@@ -137,22 +136,22 @@ impl TexJaxImports {
                 |mut caller: Caller<_>,
                  fd: i32,
                  bypass_eoln: i32,
-                 buf_pointer: i32,
-                 first_pointer: i32,
-                 last_pointer: i32,
-                 max_buf_stack_pointer: i32,
-                 buf_size: i32|
+                 buf_pointer: u32,
+                 first_pointer: u32,
+                 last_pointer: u32,
+                 _max_buf_stack_pointer: u32,
+                 _buf_size: u32|
                  -> i32 {
-                    println!(
-                        "[input_ln] {} {} {} {} {} {} {}",
-                        fd,
-                        bypass_eoln,
-                        buf_pointer,
-                        first_pointer,
-                        last_pointer,
-                        max_buf_stack_pointer,
-                        buf_size,
-                    );
+                    //println!(
+                    //    "[input_ln] {} {} {} {} {} {} {}",
+                    //    fd,
+                    //    bypass_eoln,
+                    //    buf_pointer,
+                    //    first_pointer,
+                    //    last_pointer,
+                    //    max_buf_stack_pointer,
+                    //    buf_size,
+                    //);
                     let mem = caller.get_export("0").unwrap().into_memory().unwrap();
                     // Get the u32 stored in the `first_pointer` memory location.
                     let get_first = |caller: &Caller<VirtualFileSystem>| {
@@ -161,24 +160,20 @@ impl TexJaxImports {
                         first
                     };
                     // Get the u32 stored in the `first_pointer` memory location.
-                    let get_last = |caller: &Caller<VirtualFileSystem>| {
-                        let last = u8_to_u32(&read_memory(&mem, caller, last_pointer as usize, 4));
-                        last
-                    };
+                    //let get_last = |caller: &Caller<VirtualFileSystem>| {
+                    //    let last = u8_to_u32(&read_memory(&mem, caller, last_pointer as usize, 4));
+                    //    last
+                    //};
                     //// Set the u32 stored in the `first_pointer` memory location.
-                    let set_first = |first: u32, caller: &mut Caller<VirtualFileSystem>| {
-                        mem.write(caller, first_pointer as usize, &first.to_ne_bytes())
-                            .expect("Failed to write to memory");
-                    };
+                    //let set_first = |first: u32, caller: &mut Caller<VirtualFileSystem>| {
+                    //    mem.write(caller, first_pointer as usize, &first.to_ne_bytes())
+                    //        .expect("Failed to write to memory");
+                    //};
                     // Set the u32 stored in the `last_pointer` memory location.
                     let set_last = |last: u32, caller: &mut Caller<VirtualFileSystem>| {
                         mem.write(caller, last_pointer as usize, &last.to_ne_bytes())
                             .expect("Failed to write to memory");
                     };
-
-                    // dbg!((caller.data_mut() as &mut VirtualFileSystem)
-                    //     .get_file_pointer_by_index(fd)
-                    //     .unwrap());
 
                     // Get the byte at offset first_pointer and last_pointer from the memory
                     let first = get_first(&caller);
@@ -187,125 +182,76 @@ impl TexJaxImports {
                     // cf. Matthew 19:30
                     set_last(last, &mut caller);
 
-                    println!(
-                        "   [input_ln] first[0] = {}; last[0] = {}",
-                        get_first(&caller),
-                        get_last(&caller)
-                    );
-
-                    // Bypassing the eoln character means stepping past any "\n". The TeX algorithm
-                    // specifies to just advance the file pointer one.
-                    let mut first_char = Vec::new();
-                    if bypass_eoln != 0 {
-                        first_char.extend_from_slice(
-                            (caller.data_mut() as &mut VirtualFileSystem)
-                                .read_from_file_by_index(fd, 1)
-                                .as_slice(),
-                        );
-                    }
-                    println!(
-                        "   [input_ln] first_char: {:?} {:?}",
-                        String::from_utf8_lossy(&first_char),
-                        &first_char
-                    );
-                    if let Some(&b'\n') = first_char.last() {
-                        first_char.clear();
-                    }
+                    //{
+                    //    println!(
+                    //        "  [input_ln] first[0] = {}; last[0] = {}",
+                    //        get_first(&caller),
+                    //        get_last(&caller),
+                    //    );
+                    //}
+                    //{
+                    //    let vfs: &mut VirtualFileSystem = caller.data_mut();
+                    //    let fp = vfs.get_file_pointer_by_index(fd).unwrap();
+                    //    println!("  [input_ln] {:?}", fp);
+                    //}
 
                     let vfs: &mut VirtualFileSystem = caller.data_mut();
-                    let file_len = vfs.get_length(fd);
-
-                    // If we are at the end of the file, we need to return early.
-                    if vfs.at_eof_by_index(fd) {
-                        return 0;
+                    if bypass_eoln != false as i32 {
+                        vfs.skip_current_newline_by_index(fd);
                     }
 
-                    // Figure out where the next newline is.
-                    let newline_offset = vfs.next_newline_offset_by_index(fd).unwrap();
-                    let current_file_position = vfs.get_file_pointer_by_index(fd).unwrap().position;
-                    //dbg!("c", vfs.get_file_pointer_by_index(fd).unwrap().position);
-                    let input_line = if newline_offset > current_file_position {
-                        vfs.read_from_file_by_index(fd, newline_offset - current_file_position)
+                    if let Some(mut input_line) = vfs.read_line_by_index(fd) {
+                        // We have successfully read in a line of text.
+                        // The TeX algorithm says all spaces at the end of the line are to be ignored.
+                        while let Some(&b' ') = input_line.last() {
+                            input_line.pop();
+                        }
+                        if input_line.len() > 0 {
+                            let _first = get_first(&caller);
+                            mem.write(
+                                &mut caller,
+                                (buf_pointer + _first as u32) as usize,
+                                &input_line,
+                            )
+                            .expect("Failed to write to memory");
+                            set_last(_first + input_line.len() as u32, &mut caller);
+                        }
+
+                        //{
+                        //    println!(
+                        //        "  [input_ln] input_line (directly read): {:?} {:?}",
+                        //        String::from_utf8_lossy(&input_line),
+                        //        &input_line,
+                        //    );
+                        //    println!(
+                        //        "  [input_ln] first[0] = {}; last[0] = {}",
+                        //        get_first(&caller),
+                        //        get_last(&caller),
+                        //    );
+                        //}
+
+                        true as i32
                     } else {
-                        Vec::new()
-                    };
-                    let mut input_line = first_char
-                        .into_iter()
-                        .chain(input_line.into_iter())
-                        .collect::<Vec<_>>();
-
-                    //dbg!(String::from_utf8_lossy(&input_line));
-
-                    let _first = get_first(&caller);
-                    mem.write(
-                        &mut caller,
-                        (buf_pointer + _first as i32) as usize,
-                        &input_line,
-                    )
-                    .expect("Failed to write to memory");
-                    // All trailing spaces are removed from the input line.
-                    while let Some(&b' ') = input_line.last() {
-                        input_line.pop();
+                        // We won't get a line of text if we are at the end of the file.
+                        false as i32
                     }
-
-                    // `last` is supposed to point to the last non-space character in the buffer.
-                    let last = first + input_line.len() as u32 + 1;
-                    let last = if last >= file_len as u32 {
-                        file_len as u32 - 1
-                    } else {
-                        last
-                    };
-
-                    {
-                        let vfs: &mut VirtualFileSystem = caller.data_mut();
-                        println!(
-                            "   [input_ln] at_eof = {} file_len = {} (file {:?})",
-                            vfs.at_eof_by_index(fd),
-                            vfs.get_length(fd),
-                            vfs.get_file_pointer_by_index(fd)
-                        );
-                        let byte_at_end_of_line = vfs.get_file_byte(fd, last as usize);
-                        println!(
-                            "   [input_ln] byte_at_end_of_file: {} {:?}",
-                            byte_at_end_of_line,
-                            String::from_utf8_lossy(&[byte_at_end_of_line])
-                        );
-                    }
-                    set_last(last, &mut caller);
-
-                    println!(
-                        "   [input_ln] (string: '{}') (raw: {:?})",
-                        String::from_utf8(input_line.clone()).unwrap(),
-                        &input_line
-                    );
-                    println!(
-                        "   [input_ln] first[0] = {}; last[0] = {}",
-                        get_first(&caller),
-                        get_last(&caller)
-                    );
-                    1
                 },
             ),
             print_char: Func::wrap(&mut *store, |mut caller: Caller<_>, fd: i32, char: i32| {
                 let vfs: &mut VirtualFileSystem = caller.data_mut();
                 vfs.write_to_file_by_index(fd, &[char as u8]);
-                //println!(
-                //    "[print_char] {} {} {}",
-                //    fd,
-                //    char,
-                //    String::from_utf8(vec![char as u8]).unwrap()
-                //);
             }),
-            print_integer: Func::wrap(&mut *store, |a: i32, b: i32| {
-                println!("print_integer {} {}", a, b);
+            print_integer: Func::wrap(&mut *store, |mut caller: Caller<_>, fd: i32, num: i32| {
+                let vfs: &mut VirtualFileSystem = caller.data_mut();
+                vfs.write_to_file_by_index(fd, num.to_string().as_bytes());
             }),
             print_newline: Func::wrap(&mut *store, |mut caller: Caller<_>, fd: i32| {
                 let vfs: &mut VirtualFileSystem = caller.data_mut();
-                println!(
-                    "[print_newline] {} {:?}",
-                    fd,
-                    vfs.get_file_pointer_by_index(fd).map(|fp| &fp.file)
-                );
+                //println!(
+                //    "[print_newline] {} {:?}",
+                //    fd,
+                //    vfs.get_file_pointer_by_index(fd).map(|fp| &fp.file)
+                //);
 
                 vfs.write_to_file_by_index(fd, b"\n");
             }),
@@ -324,25 +270,34 @@ impl TexJaxImports {
                     ))
                     .unwrap();
 
-                    println!(
-                        "[print_string] {} {} {:?} {:?}",
-                        fd,
-                        pointer,
-                        (caller.data() as &VirtualFileSystem)
-                            .get_file_pointer_by_index(fd)
-                            .unwrap()
-                            .file,
-                        string
-                    );
+                    //println!(
+                    //    "[print_string] {} {} {:?} {:?}",
+                    //    fd,
+                    //    pointer,
+                    //    (caller.data() as &VirtualFileSystem)
+                    //        .get_file_pointer_by_index(fd)
+                    //        .unwrap()
+                    //        .file,
+                    //    string
+                    //);
 
                     // write to the correct file
                     let vfs: &mut VirtualFileSystem = caller.data_mut();
                     vfs.write_to_file_by_index(fd, string.as_bytes());
                 },
             ),
-            put: Func::wrap(&mut *store, |a: i32, b: i32, c: i32| {
-                println!("put {} {} {}", a, b, c);
-            }),
+            put: Func::wrap(
+                &mut *store,
+                |mut caller: Caller<_>, fd: i32, pointer: u32, length: u32| {
+                    let mem = caller.get_export("0").unwrap().into_memory().unwrap();
+                    let mut buffer = vec![0u8; length as usize];
+                    mem.read(&caller, pointer as usize, &mut buffer)
+                        .expect("Failed to read memory before call to `put`");
+
+                    let vfs: &mut VirtualFileSystem = caller.data_mut();
+                    vfs.write_to_file_by_index(fd, &buffer);
+                },
+            ),
             reset: Func::wrap(
                 &mut *store,
                 |mut caller: Caller<_>, length: u32, pointer: u32| -> i32 {
@@ -356,9 +311,9 @@ impl TexJaxImports {
                         _ => FileType::Named(file_name),
                     };
 
-                    println!(
-                        "[reset] {length} {pointer} Requesting file '{file_name}' returned descriptor to {file:?}",
-                    );
+                    //println!(
+                    //    "[reset] {length} {pointer} Requesting file '{file_name}' returned descriptor to {file:?}",
+                    //);
 
                     let vfs: &mut VirtualFileSystem = caller.data_mut();
                     vfs.get_file_descriptor(file, true) as i32
@@ -377,9 +332,9 @@ impl TexJaxImports {
                         _ => FileType::Named(file_name),
                     };
 
-                    println!(
-                        "[rewrite] Requesting file '{file_name}' returned descriptor to {file:?}"
-                    );
+                    //println!(
+                    //    "[rewrite] Requesting file '{file_name}' returned descriptor to {file:?}"
+                    //);
 
                     let vfs: &mut VirtualFileSystem = caller.data_mut();
                     vfs.get_file_descriptor(file, false) as u32

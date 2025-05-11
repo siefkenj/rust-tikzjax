@@ -1,4 +1,7 @@
 use std::{collections::HashMap, io::Read};
+// XXX: remove later
+    use std::fs::File;
+use std::io::Write;
 
 use anyhow::Result;
 use flate2::read::GzDecoder;
@@ -108,6 +111,19 @@ fn main() -> Result<()> {
     // Print stdout at this point so we know what happened.
     let stdout = store.data().get_stdout();
     println!("\n\nGOT THE FOLLOWING TEX OUTPUT:\n\n{}", stdout);
+    
+    let input_dvi = store.data().get_file_contents(FileType::Named("input.dvi"));
+    let input_dvi_text = String::from_utf8_lossy(&input_dvi.unwrap());
+    println!("\n\nGOT THE FOLLOWING DVI OUTPUT:\n\n{}", input_dvi_text);
+    
+    //let input_dvi = store.data().get_file_contents(FileType::Named("input.log"));
+    //let input_dvi_text = String::from_utf8_lossy(&input_dvi.unwrap());
+    //println!("\n\nGOT THE FOLLOWING LOG OUTPUT:\n\n{}", input_dvi_text);
+
+    // Write the content of input_dvi to a file as bytes
+    let mut file = std::fs::File::create("input.dvi")?;
+    file.write_all(&input_dvi.unwrap())?;
+
 
 
     // Instantiation of a Wasm module requires defining its imports and then
