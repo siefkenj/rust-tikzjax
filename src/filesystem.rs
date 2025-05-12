@@ -34,7 +34,6 @@ impl VirtualFileSystem {
         }
     }
 
-
     /// Get a file descriptor for the specified file. There is no
     /// way for this function to fail. If the file does not exist,
     /// a new file will be created with the corresponding name.
@@ -261,6 +260,26 @@ impl VirtualFileSystem {
     pub fn set_stdin(&mut self, data: &[u8]) {
         self.stdin = data.to_vec();
     }
+
+    /// Set the contents of a file. This will override the entire file and
+    /// reset the position of any pointers into the file.
+    pub fn set_file_contents(&mut self, file: FileType<&str>, data: &[u8]) {
+        match file {
+            FileType::Stdin => self.stdin = data.to_vec(),
+            FileType::Stdout => self.stdout = data.to_vec(),
+            FileType::Named(name) => {
+                self.data.insert(name.to_string(), data.to_vec());
+                for fp in &mut self.fd_to_file_pointer {
+                    if let FileType::Named(ref n) = fp.file {
+                        if n == name {
+                            fp.byte_seek_position = 0;
+                            fp.text_seek_position = 0;
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -282,7 +301,8 @@ pub(crate) struct FilePointer {
     /// information from the file is read as text, this pointer is advanced.
     ///
     /// XXX: It is not completely clear why two pointers are needed, but this mirrors what the
-    /// tikzjax Javascript code does.
+    /// tikzjax Javascript code does. Experiments using only one pointer appear to produce the same
+    /// dvi output. TODO: remove the second pointer?
     pub text_seek_position: usize,
     pub erstat: i32,
 }
