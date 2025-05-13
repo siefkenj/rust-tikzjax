@@ -1,5 +1,5 @@
 [package]
-name = "rust_tikz"
+name = "rust-tikz"
 version = "0.1.0"
 edition = "2024"
 description = "A Rust runtime for TeX and TikZ, powered by WebAssembly."
