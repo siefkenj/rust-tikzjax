@@ -9,6 +9,7 @@ homepage = "https://github.com/siefkenj/rust-tikzjax"
 repository = "https://github.com/siefkenj/rust-tikzjax"
 
 [lib]
+crate-type = ["lib", "cdylib"]
 path = "src/lib.rs"
 
 [dependencies]
