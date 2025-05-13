@@ -7,6 +7,7 @@ edition = "2024"
 crate-type = ["cdylib"]
 
 [dependencies]
-rust_tikz = { version = "0.1.0", path = "../rust_tikz" }
+#rust_tikz = "0.1.0"
 wasm-minimal-protocol = { git = "https://github.com/astrale-sharp/wasm-minimal-protocol" }
-#rust_tikz = { path = "../rust_tikz" }
+
+rust_tikz = { path = "../rust_tikz" }
