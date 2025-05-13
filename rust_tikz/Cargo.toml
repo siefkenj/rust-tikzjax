@@ -3,7 +3,7 @@ name = "rust_tikz"
 version = "0.1.0"
 edition = "2024"
 description = "A Rust runtime for TeX and TikZ, powered by WebAssembly."
-links = "MIT"
+license = "MIT"
 
 [lib]
 crate-type = ["cdylib"]
