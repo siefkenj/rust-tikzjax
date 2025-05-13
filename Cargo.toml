@@ -1,13 +1,11 @@
-[package]
-name = "rust-tikz"
-version = "0.1.0"
-edition = "2021"
+[workspace]
+resolver = "3"
+members = ["typst_tikz", "rust_tikz"]
+default-members = ["rust_tikz"]
 
-[dependencies]
-anyhow = "1.0.92"
-dvi = "0.2.2"
-dvi2html = "0.2.0"
-flate2 = "1.0.34"
-tar = "0.4.43"
-wasmi = "0.39.0"
-wat = "1.219.1"
+[profile.release]
+lto = true # Enable link-time optimization
+strip = true # Strip symbols from binary*
+opt-level = 'z' # Optimize for size
+codegen-units = 1 # Reduce number of codegen units to increase optimizations
+panic = 'abort' # Abort on panic

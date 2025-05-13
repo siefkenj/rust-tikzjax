@@ -17,6 +17,8 @@ const TEX_FILE_BYTES: &[u8] = include_bytes!("./assets/tex_files.tar.gz");
 const WASM_BYTES: &[u8] = include_bytes!("./assets/tex.wasm");
 const CORE_BYTES: &[u8] = include_bytes!("./assets/core.dump");
 
+/// Holds the TeX engine and initialized `wasmr` runtime. This object stubs out all
+/// of the system calls that the WASM-compiled TeX engine needs to run.
 pub struct WasmRunner {
     store: Store<VirtualFileSystem>,
     instance: Instance,
@@ -172,6 +174,8 @@ fn extract_tar_gz_to_memory(bytes: &[u8]) -> Result<HashMap<String, Vec<u8>>> {
     Ok(extracted_files)
 }
 
+/// Convert a TeX string to SVG using the given [`WasmRunner`]. This function can be called
+/// multiple times with the same [`WasmRunner`].
 pub fn tex2svg(wasm_runner: &mut WasmRunner, input_str: &str) -> Result<String> {
     wasm_runner.set_input(input_str.as_bytes());
     let svg = wasm_runner.run()?;

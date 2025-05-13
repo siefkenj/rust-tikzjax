@@ -1,0 +1,17 @@
+[package]
+name = "rust_tikz"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = "1.0.92"
+dvi = "0.2.2"
+dvi2html = "0.2.0"
+flate2 = "1.0.34"
+tar = "0.4.43"
+wasmi = "0.39.0"
+wat = "1.219.1"
