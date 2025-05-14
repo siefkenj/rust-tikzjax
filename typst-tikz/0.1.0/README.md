@@ -27,6 +27,7 @@ into an SVG which is finally passed to Typst for rendering.
   ![Circle example](https://raw.githubusercontent.com/siefkenj/rust-tikzjax/refs/heads/main/examples/readme-2.png)
   
   More complicated TikZ figures may take a while to render.
+  ````tikz
   #typst-tikz(```
   \usepackage{tikz-cd}
 
