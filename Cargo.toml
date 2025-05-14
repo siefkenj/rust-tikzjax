@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["typst-tikz", "rust-tikz"]
+members = ["typst-tikz-lib", "rust-tikz"]
 default-members = ["rust-tikz"]
 
 [profile.release]

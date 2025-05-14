@@ -17,11 +17,11 @@ pub fn text2svg_simple(input: &str) -> Result<String> {
     let svg_result = tex2svg(&mut wasm_runner, input);
     if svg_result.is_err() {
         let error = svg_result.unwrap_err();
-        println!("Error: {}", error);
-        // Show the log file
-        let log_result = wasm_runner.get_messages()?;
-        println!("input.log:\n{}", log_result);
-        return Err(Error::msg("Failed to convert DVI to SVG."));
+        //println!("Error: {}", error);
+        // Show the messages file
+        let messages = wasm_runner.get_messages()?;
+        //println!("input.log:\n{}", log_result);
+        return Err(Error::msg(format!("Failed to convert DVI to SVG.\nError: {error}\n\nMessages:\n{messages}")));
     }
 
     Ok(svg_result.unwrap())

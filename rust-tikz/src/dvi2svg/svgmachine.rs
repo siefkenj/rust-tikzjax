@@ -100,6 +100,7 @@ impl Machine for SVGMachine {
                 text_height = std::cmp::max(text_height, metrics.height);
                 text_depth = std::cmp::max(text_depth, metrics.depth);
 
+                println!("Converting {c} to character {buffer:?}");
                 // This is ridiculous.
                 if c <= 9 {
                     html_text.push_str(&format!("&#{};", 161 + c));

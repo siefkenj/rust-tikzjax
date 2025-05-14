@@ -1,0 +1,11 @@
+[package]
+name = "typst-tikz-lib"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["lib", "cdylib"]
+
+[dependencies]
+wasm-minimal-protocol = { git = "https://github.com/astrale-sharp/wasm-minimal-protocol" }
+rust-tikz = { path = "../rust-tikz" }

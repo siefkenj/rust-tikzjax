@@ -1,0 +1,10 @@
+[package]
+name = "typst-tikz"
+version = "0.1.0"
+entrypoint = "lib.typ"
+authors = ["Jason Siefken"]
+license = "MIT"
+description = "Typst package to embed TikZ graphics"
+repository = "https://github.com/siefkenj/rust-tikzjax"
+categories = ["fun"]
+compiler = "0.13.0"

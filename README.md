@@ -23,5 +23,10 @@ or, to execute example code run
 cargo run
 ```
 
+### Typst plugin
+
+To build the Typst plugin, run `./build.sh` which will build and copy a web-assembly version of the library for use
+in a typst plugin.
+
 ### TeX source code
 Documentation for the TeX source code, including all system calls (that TeX relies on from Pascal) at https://tug.ctan.org/info/knuth-pdf/tex/tex.pdf
