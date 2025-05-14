@@ -10,6 +10,8 @@ into an SVG which is finally passed to Typst for rendering.
   ````typst
     #typst-tikz("\\begin{document}Hello World!\\end{document}")
   ````
+
+  ![Hello world example](https://raw.githubusercontent.com/siefkenj/rust-tikzjax/refs/heads/main/examples/readme-1.png)
   
   A tikz picture can be placed inside the document:
   ````typst
@@ -21,6 +23,8 @@ into an SVG which is finally passed to Typst for rendering.
       \end{document}
     ```),
   ````
+  
+  ![Circle example](https://raw.githubusercontent.com/siefkenj/rust-tikzjax/refs/heads/main/examples/readme-2.png)
   
   More complicated TikZ figures may take a while to render.
   #typst-tikz(```
@@ -52,6 +56,7 @@ into an SVG which is finally passed to Typst for rendering.
     ```),
   ````
 
+  ![Commutative diagram example](https://raw.githubusercontent.com/siefkenj/rust-tikzjax/refs/heads/main/examples/readme-3.png)
 
 ## Limitations
 
